@@ -1,0 +1,7 @@
+{
+  "name": "DroidBase Supabase Hub",
+  "description": "A sleek, Android-style login and dashboard application integrated with Supabase. Designed with a mobile-first Material Design approach.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
