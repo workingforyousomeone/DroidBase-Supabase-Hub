@@ -12,10 +12,12 @@ export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
 export interface AssessmentRecord {
   assessment_no: string;
   owner_name: string;
+  guardian_name?: string;
   zone_id: string;
   demand: number;
   collected: number;
   pending: number;
+  details?: Record<string, any>;
 }
 
 export interface ZoneMetrics {
@@ -29,6 +31,7 @@ export interface ZoneMetrics {
 
 export interface OwnerSummary {
   owner_name: string;
+  guardian_name?: string;
   totalDemand: number;
   totalCollected: number;
   totalPending: number;
@@ -70,5 +73,8 @@ export interface RawOwner {
   id: string | number;
   assessment_no?: string;
   name?: string;
+  guardian_name?: string;
+  father_name?: string;
+  husband_name?: string;
   [key: string]: any;
 }

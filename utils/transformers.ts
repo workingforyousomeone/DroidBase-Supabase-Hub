@@ -10,10 +10,6 @@ import {
 } from '../types';
 
 export const DataTransformer = {
-  /**
-   * High-fidelity name validation.
-   * Filters out common database placeholders and ID-like strings.
-   */
   isValidName(name: any): boolean {
     if (name === null || name === undefined) return false;
     const n = String(name).trim();
@@ -25,38 +21,25 @@ export const DataTransformer = {
       'none', 'false', 'nan', 'owner', 'null value', 'tbd', 'missing', 'payer'
     ];
     
-    // Exclude if it's just a number or looks like a placeholder ID
     if (!isNaN(Number(n)) && n.length > 0 && n.length < 10) return false;
     if (n.includes('[ID:')) return false;
     
     return !noise.includes(lower);
   },
 
-  /**
-   * Normalize IDs for strict cross-table matching.
-   */
   normalizeId(id: any): string | null {
     if (id === null || id === undefined) return null;
     return String(id).trim().toUpperCase().replace(/\s+/g, '');
   },
 
-  /**
-   * Extract ID with support for multiple naming schemes.
-   */
   resolveId(obj: any): string | null {
     if (!obj) return null;
-    // Priority order for ID resolution
     const val = obj.assessment_no || obj.assessment_id || obj.property_id || obj.id;
     return this.normalizeId(val);
   },
 
-  /**
-   * Scans an object for any property that might contain a valid name.
-   */
   resolveName(obj: any): string | null {
     if (!obj) return null;
-    
-    // 1. Direct matches for known schema patterns
     const directCandidates = [
       obj.owner_name, obj.name, obj.owner, obj.full_name, 
       obj.firstname, obj.lastname, obj.prop_owner, obj.citizen_name,
@@ -67,7 +50,6 @@ export const DataTransformer = {
       if (this.isValidName(val)) return String(val).trim();
     }
 
-    // 2. Deep Key Scan
     const keys = Object.keys(obj);
     const nameKeywords = ['name', 'owner', 'citizen', 'taxpayer', 'payer', 'full', 'prop_ow'];
     
@@ -83,9 +65,87 @@ export const DataTransformer = {
   },
 
   /**
-   * Master Data Processing Logic:
-   * Uses a Two-Pass approach to ensure actual names are linked from the best possible source.
+   * Specifically resolves guardian/father/husband names.
    */
+  resolveGuardianName(obj: any): string | null {
+    if (!obj) return null;
+    const candidates = [
+      obj.guardian_name, obj.father_name, obj.husband_name, 
+      obj.guardian, obj.father, obj.husband,
+      obj.so, obj.wo, obj['s/o'], obj['w/o'],
+      obj.care_of, obj.co
+    ];
+
+    for (const val of candidates) {
+      if (this.isValidName(val)) return String(val).trim();
+    }
+
+    // Scan for relationship patterns
+    const keys = Object.keys(obj);
+    const kw = ['father', 'husband', 'guardian', 'care_of', 's/o', 'w/o'];
+    for (const key of keys) {
+      const lk = key.toLowerCase();
+      if (kw.some(k => lk.includes(k))) {
+        const val = obj[key];
+        if (this.isValidName(val)) return String(val).trim();
+      }
+    }
+    return null;
+  },
+
+  categorizeDetails(raw: any) {
+    const categories: Record<string, Record<string, any>> = {
+      'Owner Details': {},
+      'Building Details': {},
+      'Floor Details': {},
+      'Mutation Details': {},
+      'Neighbouring Properties': {},
+      'Life Cycle Details': {},
+      'Other Info': {}
+    };
+
+    const mapping: Record<string, string> = {
+      // Owner
+      'mobile': 'Owner Details', 'phone': 'Owner Details', 'email': 'Owner Details', 'address': 'Owner Details', 'gender': 'Owner Details', 
+      'father': 'Owner Details', 'husband': 'Owner Details', 'guardian': 'Owner Details', 's/o': 'Owner Details', 'w/o': 'Owner Details', 'care_of': 'Owner Details',
+      // Building
+      'usage': 'Building Details', 'construction': 'Building Details', 'age': 'Building Details', 'area': 'Building Details', 'plot': 'Building Details', 'category': 'Building Details', 'build_up': 'Building Details',
+      // Floor
+      'floor': 'Floor Details', 'basement': 'Floor Details', 'terrace': 'Floor Details', 'levels': 'Floor Details',
+      // Mutation
+      'mutation': 'Mutation Details', 'transfer': 'Mutation Details', 'registry': 'Mutation Details', 'seller': 'Mutation Details',
+      // Neighbouring
+      'north': 'Neighbouring Properties', 'south': 'Neighbouring Properties', 'east': 'Neighbouring Properties', 'west': 'Neighbouring Properties', 'boundary': 'Neighbouring Properties',
+      // Life Cycle
+      'created': 'Life Cycle Details', 'approved': 'Life Cycle Details', 'updated': 'Life Cycle Details', 'active': 'Life Cycle Details', 'status': 'Life Cycle Details'
+    };
+
+    const coreKeys = ['assessment_no', 'owner_name', 'cluster_id', 'id', 'created_at', 'updated_at'];
+
+    Object.entries(raw).forEach(([key, val]) => {
+      if (coreKeys.includes(key.toLowerCase()) || val === null || val === '') return;
+
+      const lowerKey = key.toLowerCase();
+      let assigned = false;
+
+      for (const [kw, cat] of Object.entries(mapping)) {
+        if (lowerKey.includes(kw)) {
+          const displayKey = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          categories[cat][displayKey] = val;
+          assigned = true;
+          break;
+        }
+      }
+
+      if (!assigned) {
+        const displayKey = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        categories['Other Info'][displayKey] = val;
+      }
+    });
+
+    return Object.fromEntries(Object.entries(categories).filter(([_, v]) => Object.keys(v).length > 0));
+  },
+
   processMasterData(
     assessments: RawAssessment[],
     demands: RawDemand[],
@@ -95,34 +155,30 @@ export const DataTransformer = {
   ) {
     const registryMap = new Map<string, AssessmentRecord>();
     const masterNameMap = new Map<string, string>();
+    const masterGuardianMap = new Map<string, string>();
 
     /**
-     * PASS 1: GLOBAL NAME DISCOVERY
-     * Aggressively build a name map from all available tables.
+     * PASS 1: GLOBAL DATA DISCOVERY (Owner names AND Guardian names)
      */
     
-    // Source: Master Owners Table (High Priority)
     owners.forEach(o => {
       const id = this.resolveId(o);
       const name = this.resolveName(o);
+      const guardian = this.resolveGuardianName(o);
       if (id && name) masterNameMap.set(id, name);
+      if (id && guardian) masterGuardianMap.set(id, guardian);
     });
 
-    // Source: Assessment Registry (High Priority)
     assessments.forEach(a => {
       const id = this.resolveId(a);
       const name = this.resolveName(a);
+      const guardian = this.resolveGuardianName(a);
+      
       if (id && name && (!masterNameMap.has(id) || masterNameMap.get(id)!.length < name.length)) {
         masterNameMap.set(id, name);
       }
-    });
-
-    // Source: Demands & Collections (Fallback names)
-    [...demands, ...collections].forEach(record => {
-      const id = this.resolveId(record);
-      const name = this.resolveName(record);
-      if (id && name && !masterNameMap.has(id)) {
-        masterNameMap.set(id, name);
+      if (id && guardian && !masterGuardianMap.has(id)) {
+        masterGuardianMap.set(id, guardian);
       }
     });
 
@@ -130,35 +186,37 @@ export const DataTransformer = {
      * PASS 2: RECORD CONSTRUCTION & ENRICHMENT
      */
 
-    // Step 1: Base Registry from Assessments Table
     assessments.forEach(a => {
       const id = this.resolveId(a);
       if (!id) return;
       
       const finalName = masterNameMap.get(id) || `Owner [ID:${id}]`;
+      const finalGuardian = masterGuardianMap.get(id) || '';
+      const structuredDetails = this.categorizeDetails(a);
 
       registryMap.set(id, {
         assessment_no: id,
         owner_name: finalName,
+        guardian_name: finalGuardian,
         zone_id: a.cluster_id ? String(a.cluster_id).trim() : 'unassigned',
         demand: 0,
         collected: 0,
-        pending: 0
+        pending: 0,
+        details: structuredDetails
       });
     });
 
-    // Step 2: Merge Demand (Billing) Data
+    // Merge demands and collections into the central registry
     demands.forEach(d => {
       const id = this.resolveId(d);
       if (!id) return;
 
       let record = registryMap.get(id);
-      
-      // Handle Orphans (in demands but not assessments table)
       if (!record) {
         record = {
           assessment_no: id,
           owner_name: masterNameMap.get(id) || this.resolveName(d) || `External [ID:${id}]`,
+          guardian_name: masterGuardianMap.get(id) || this.resolveGuardianName(d) || '',
           zone_id: 'unassigned',
           demand: 0,
           collected: 0,
@@ -166,21 +224,19 @@ export const DataTransformer = {
         };
         registryMap.set(id, record);
       }
-
       record.demand += Math.max(0, Number(d.total_demand) || 0);
     });
 
-    // Step 3: Merge Collection (Payment) Data
     collections.forEach(c => {
       const id = this.resolveId(c);
       if (!id) return;
 
       let record = registryMap.get(id);
-
       if (!record) {
         record = {
           assessment_no: id,
           owner_name: masterNameMap.get(id) || this.resolveName(c) || `Payer [ID:${id}]`,
+          guardian_name: masterGuardianMap.get(id) || this.resolveGuardianName(c) || '',
           zone_id: 'unassigned',
           demand: 0,
           collected: 0,
@@ -188,11 +244,9 @@ export const DataTransformer = {
         };
         registryMap.set(id, record);
       }
-
       record.collected += Math.max(0, Number(c.total_tax) || 0);
     });
 
-    // Step 4: Final Calculations & Sorting
     const enriched: AssessmentRecord[] = Array.from(registryMap.values())
       .map(r => ({
         ...r,
@@ -200,7 +254,6 @@ export const DataTransformer = {
       }))
       .sort((a, b) => a.owner_name.localeCompare(b.owner_name));
 
-    // Step 5: Zone Metrics Aggregation
     const baseZones = Array.isArray(zones) ? [...zones] : [];
     const activeZoneIds = new Set(enriched.map(r => r.zone_id));
     
@@ -224,7 +277,6 @@ export const DataTransformer = {
       };
     });
 
-    // Step 6: Global Analytics
     const totalDemand = enriched.reduce((s, r) => s + r.demand, 0);
     const totalCollected = enriched.reduce((s, r) => s + r.collected, 0);
     
@@ -236,7 +288,7 @@ export const DataTransformer = {
       efficiency: totalDemand > 0 ? (totalCollected / totalDemand) * 100 : 0
     };
 
-    return { enriched, zoneMetrics, liveMetrics, nameMap: masterNameMap };
+    return { enriched, zoneMetrics, liveMetrics, nameMap: masterNameMap, guardianMap: masterGuardianMap };
   },
 
   formatCurrency(val: number): string {
