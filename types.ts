@@ -9,35 +9,66 @@ export interface UserProfile {
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
 
-export interface DashboardStat {
-  label: string;
-  value: string | number;
-  trend: 'up' | 'down' | 'neutral';
-  color: string;
+export interface AssessmentRecord {
+  assessment_no: string;
+  owner_name: string;
+  zone_id: string;
+  demand: number;
+  collected: number;
+  pending: number;
 }
 
-export interface ActivityItem {
+export interface ZoneMetrics {
   id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: 'info' | 'alert' | 'success';
+  name: string;
+  recordCount: number;
+  demand: number;
+  collected: number;
+  pending: number;
 }
 
-export interface Register {
+export interface OwnerSummary {
+  owner_name: string;
+  totalDemand: number;
+  totalCollected: number;
+  totalPending: number;
+  records: AssessmentRecord[];
+}
+
+export interface LiveMetrics {
+  totalAssessments: number;
+  totalDemand: number;
+  netCollections: number;
+  pendingAmount: number;
+  efficiency: number;
+}
+
+export interface RawCollection {
+  id: string;
+  assessment_no: string;
+  owner_name?: string;
+  total_tax: number;
+  date_of_payment: string;
+  [key: string]: any;
+}
+
+export interface RawDemand {
+  assessment_no: string;
+  owner_name?: string;
+  total_demand: number;
+  [key: string]: any;
+}
+
+export interface RawAssessment {
+  assessment_no: string;
+  owner_name?: string;
+  cluster_id: string;
+  [key: string]: any;
+}
+
+export interface RawOwner {
   id: string | number;
-  name: string;
-  details: string;
-  created_at: string;
-  status?: string;
-}
-
-export interface ClusterStatus {
-  id: string;
-  name: string;
-  region: string;
-  status: 'Running' | 'Scaling' | 'Idle';
-  nodes: number;
-  cpuUsage: number;
-  ramUsage: number;
+  assessment_no?: string;
+  name?: string;
+  [key: string]: any;
 }
