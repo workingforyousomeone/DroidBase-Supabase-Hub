@@ -280,3 +280,4 @@ export const DataTransformer = {
     }).format(val).replace('INR', '₹');
   }
 };
+

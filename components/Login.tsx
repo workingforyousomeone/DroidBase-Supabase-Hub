@@ -77,7 +77,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col px-8 pt-12 pb-10 bg-white overflow-y-auto no-scrollbar relative min-h-full">
+    <div className="flex-1 flex flex-col justify-center px-8 py-10 bg-white overflow-y-auto no-scrollbar relative min-h-full">
       <div className="mb-8 text-center flex flex-col items-center">
         <div className="w-16 h-16 bg-[#9A287E] rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-pink-100 transform -rotate-3">
           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

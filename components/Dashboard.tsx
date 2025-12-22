@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { DataService } from '../services/api';
 import { DataTransformer } from '../utils/transformers';
+import { formatDateDMY } from '../utils/date';
 import { 
   UserProfile, 
   AssessmentRecord, 
@@ -18,12 +19,40 @@ interface DashboardProps {
 
 type TabType = 'home' | 'zones' | 'assessment_reg' | 'demand_reg' | 'collections' | 'records' | 'ownerDetail';
 
+/**
+ * Enhanced status helper that returns visual metadata
+ * based on the zone's collection performance.
+ */
 const getZoneStatus = (pending: number, demand: number) => {
-  if (demand === 0) return { color: 'bg-slate-300' };
+  if (demand === 0) return { 
+    color: 'bg-slate-400', 
+    bg: 'bg-slate-50',
+    text: 'text-slate-600',
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M18 12H6" />, 
+    label: 'Empty' 
+  };
   const ratio = pending / demand;
-  if (ratio <= 0) return { color: 'bg-emerald-500' };
-  if (ratio > 0.5) return { color: 'bg-rose-500' };
-  return { color: 'bg-amber-500' };
+  if (ratio <= 0) return { 
+    color: 'bg-emerald-500', 
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-600',
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />, 
+    label: 'Settled' 
+  };
+  if (ratio > 0.5) return { 
+    color: 'bg-rose-500', 
+    bg: 'bg-rose-50',
+    text: 'text-rose-600',
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />, 
+    label: 'Critical' 
+  };
+  return { 
+    color: 'bg-amber-500', 
+    bg: 'bg-amber-50',
+    text: 'text-amber-600',
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />, 
+    label: 'Active' 
+  };
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
@@ -190,17 +219,88 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
             <button onClick={syncData} disabled={isSyncing} className="w-full h-10 bg-white border border-slate-100 text-[#9A287E] rounded-xl text-[9px] font-black uppercase tracking-widest shadow-sm hover:bg-slate-50 active:scale-95 disabled:opacity-50">
               {isSyncing ? 'Syncing Master Data...' : 'Refresh Master Data'}
             </button>
+
             <section className="grid grid-cols-2 gap-2">
               {[
-                { label: 'ASSETS', value: metrics.totalAssessments, color: 'text-[#9A287E]' },
-                { label: 'Demand', value: DataTransformer.formatCurrency(metrics.totalDemand), color: 'text-amber-600' },
-                { label: 'Collected', value: DataTransformer.formatCurrency(metrics.netCollections), color: 'text-emerald-600' },
-                { label: 'Pending', value: DataTransformer.formatCurrency(metrics.pendingAmount), color: 'text-rose-600' },
-              ].map((card, i) => (
-                <div key={i} className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col min-h-[64px] justify-center items-center text-center">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{card.label}</p>
-                  <h3 className={`text-sm font-black tracking-tight truncate w-full ${card.color}`}>{card.value}</h3>
-                </div>
+                {
+                  label: 'ASSETS',
+                  value: metrics.totalAssessments,
+                  color: 'text-[#9A287E]',
+                  bg: 'bg-pink-50',
+                  onClick: () => setActiveTab('zones'),
+                  icon: (
+                    <svg className="w-5 h-5 text-[#9A287E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'DEMAND',
+                  value: DataTransformer.formatCurrency(metrics.totalDemand),
+                  color: 'text-amber-600',
+                  bg: 'bg-amber-50',
+                  onClick: () => setActiveTab('records'),
+                  icon: (
+                    <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 
+                           3 .895 3 2-1.343 2-3 2m0-8
+                           c1.11 0 2.08.402 2.599 1M12 8V7
+                           m0 1v8m0 0v1m0-1
+                           c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'COLLECTED',
+                  value: DataTransformer.formatCurrency(metrics.netCollections),
+                  color: 'text-emerald-600',
+                  bg: 'bg-emerald-50',
+                  onClick: () => setActiveTab('collections'),
+                  icon: (
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 
+                           3 .895 3 2-1.343 2-3 2m0-8
+                           c1.11 0 2.08.402 2.599 1M12 8V7
+                           m0 1v8m0 0v1m0-1
+                           c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'PENDING',
+                  value: DataTransformer.formatCurrency(metrics.pendingAmount),
+                  color: 'text-rose-600',
+                  bg: 'bg-rose-50',
+                  onClick: () => setActiveTab('records'),
+                  icon: (
+                    <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )
+                }
+              ].map(card => (
+                <button
+                  key={card.label}
+                  onClick={card.onClick}
+                  className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center space-x-3 min-h-[72px]
+                             active:scale-95 transition-all hover:shadow-md hover:border-[#9A287E]/30"
+                >
+                  <div className={`w-10 h-10 ${card.bg} rounded-lg flex items-center justify-center shrink-0`}>
+                    {card.icon}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                      {card.label}
+                    </p>
+                    <h3 className={`text-sm font-black tracking-tight ${card.color}`}>
+                      {card.value}
+                    </h3>
+                  </div>
+                </button>
               ))}
             </section>
           </div>
@@ -224,7 +324,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-black text-slate-900">{DataTransformer.formatCurrency(reg.total_tax)}</p>
-                      <p className="text-[8px] font-bold text-slate-300">{new Date(reg.date_of_payment).toLocaleDateString()}</p>
+                      <p className="text-[8px] font-bold text-slate-300">{formatDateDMY(reg.date_of_payment)}</p>
                     </div>
                   </div>
                 )) : (
@@ -239,34 +339,47 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
 
         {activeTab === 'zones' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-4 duration-400 min-h-full">
-            <div className="mb-2 px-1">
+            <div className="mb-2 px-1 text-left">
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Zone Directory</h2>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{zones.length} Verified Zones</p>
             </div>
             {zones.map((zone) => {
               const status = getZoneStatus(zone.pending, zone.demand);
               return (
-                <div key={zone.id} onClick={() => loadZoneOwners(zone.id)} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-[#9A287E] active:scale-[0.98] cursor-pointer group relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-[#9A287E] rounded-xl flex items-center justify-center text-white relative">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                        <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${status.color}`}></div>
+                <div key={zone.id} onClick={() => loadZoneOwners(zone.id)} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-[#9A287E] active:scale-[0.98] cursor-pointer group relative overflow-hidden transition-all duration-300">
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity ${status.bg}`}></div>
+                  
+                  <div className="flex items-center justify-between mb-4 relative z-10">
+                    <div className="flex items-center space-x-4">
+                      <div className="relative w-14 h-14 shrink-0">
+                        <div className="w-14 h-14 bg-[#9A287E] rounded-xl flex items-center justify-center text-white shadow-lg shadow-pink-100 group-hover:scale-105 transition-transform duration-300">
+                          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                        </div>
+                        <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg ${status.color} border-2 border-white shadow-md flex items-center justify-center text-white group-hover:rotate-12 transition-transform`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {status.icon}
+                          </svg>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <h4 className="font-black text-slate-900 text-base leading-tight uppercase tracking-tight">{zone.name}</h4>
-                        <p className="text-[9px] text-[#9A287E] font-bold uppercase tracking-widest mt-0.5">{zone.recordCount} Assets</p>
+                      <div className="flex-1 text-left min-w-0">
+                        <h4 className="font-black text-slate-900 text-base leading-tight uppercase tracking-tight truncate">{zone.name}</h4>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <p className="text-[10px] text-[#9A287E] font-black uppercase tracking-widest">{zone.recordCount} Assets</p>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${status.bg} ${status.text}`}>
+                            {status.label}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-rose-50 p-3 rounded-xl text-center">
-                      <p className="text-[8px] font-black text-rose-600 uppercase mb-0.5">Pending</p>
-                      <p className="text-xs font-black text-rose-700">{DataTransformer.formatCurrency(zone.pending)}</p>
+                  <div className="grid grid-cols-2 gap-3 relative z-10">
+                    <div className="bg-rose-50 p-3 rounded-xl border border-rose-100/30">
+                      <p className="text-[8px] font-black text-rose-500 uppercase mb-0.5 tracking-widest">Pending</p>
+                      <p className="text-sm font-black text-rose-700">{DataTransformer.formatCurrency(zone.pending)}</p>
                     </div>
-                    <div className="bg-emerald-50 p-3 rounded-xl text-center">
-                      <p className="text-[8px] font-black text-emerald-600 uppercase mb-0.5">Paid</p>
-                      <p className="text-xs font-black text-emerald-700">{DataTransformer.formatCurrency(zone.collected)}</p>
+                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100/30">
+                      <p className="text-[8px] font-black text-emerald-500 uppercase mb-0.5 tracking-widest">Paid</p>
+                      <p className="text-sm font-black text-emerald-700">{DataTransformer.formatCurrency(zone.collected)}</p>
                     </div>
                   </div>
                 </div>
@@ -285,7 +398,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
               {zoneOwners.length > 0 ? zoneOwners.map(o => (
                 <div key={o.owner_name} onClick={() => openOwner(o)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm cursor-pointer hover:border-[#9A287E] active:scale-[0.98] transition-all">
                   <div className="flex justify-between items-start">
-                    <div className="min-w-0 pr-4">
+                    <div className="min-w-0 pr-4 text-left">
                       <p className="font-black text-xs text-slate-900 uppercase truncate tracking-tight">{o.owner_name}</p>
                       <p className="text-[8px] font-black text-slate-400 uppercase mt-1 tracking-widest">{o.no_of_properties} Properties</p>
                     </div>
@@ -322,7 +435,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight truncate leading-tight">{selectedOwner.owner_name}</h2>
-                  <p className="text-[9px] font-bold text-[#9A287E] uppercase tracking-widest mt-0.5 truncate">Property Profile Portfolio</p>
+                  <p className="text-[9px] font-bold text-[#9A287E] uppercase tracking-widest mt-0.5 truncate">Guardian: {selectedOwner.guardian_name || '—'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 relative z-10 text-center">
@@ -332,11 +445,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
               </div>
             </div>
             <div className="space-y-6">
-              <div className="px-1"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified Asset Portfolio</h3></div>
+              <div className="px-1 text-left"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified Asset Portfolio</h3></div>
               {ownerProfile.length > 0 ? ownerProfile.map((p, idx) => (
                 <section key={idx} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-                    <div><p className="text-[8px] font-black text-[#9A287E] uppercase tracking-widest">Asset Reference</p><p className="text-xs font-black text-slate-900">{p.assessment_no}</p></div>
+                    <div className="text-left"><p className="text-[8px] font-black text-[#9A287E] uppercase tracking-widest">Asset Reference</p><p className="text-xs font-black text-slate-900">{p.assessment_no}</p></div>
                     <div className="text-right"><p className="text-[8px] font-black text-slate-400 uppercase">Usage Type</p><p className="text-[10px] font-bold text-slate-800 uppercase">{p.usage || 'N/A'}</p></div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-left">
@@ -350,13 +463,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Profile data sync pending</p>
                  </div>
               )}
-              <div className="px-1"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Audit Payment History</h3></div>
+              <div className="px-1 text-left"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Audit Payment History</h3></div>
               <section className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                  {ownerPayments.length > 0 ? (
                     <div className="space-y-3">
                        {ownerPayments.map((pay, idx) => (
                          <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <div className="text-left"><p className="text-[7px] font-black text-slate-400 uppercase">Audit Date</p><p className="text-[10px] font-bold text-slate-900">{new Date(pay.date_of_payment).toLocaleDateString()}</p></div>
+                            <div className="text-left"><p className="text-[7px] font-black text-slate-400 uppercase">Audit Date</p><p className="text-[10px] font-bold text-slate-900">{formatDateDMY(pay.date_of_payment)}</p></div>
                             <div className="text-right"><p className="text-[7px] font-black text-emerald-500 uppercase">Net Settled</p><p className="text-sm font-black text-emerald-600">{DataTransformer.formatCurrency(pay.total_tax)}</p></div>
                          </div>
                        ))}
@@ -373,7 +486,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
 
         {activeTab === 'collections' && (
           <div className="space-y-4 min-h-full">
-             <div className="mb-4 px-1">
+             <div className="mb-4 px-1 text-left">
                <h2 className="text-xl font-black text-slate-900 tracking-tight">Audit Ledger</h2>
                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global History</p>
              </div>
@@ -386,7 +499,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut }) => {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-black text-emerald-600">{DataTransformer.formatCurrency(c.total_tax)}</p>
-                      <p className="text-[8px] font-bold text-slate-300 uppercase">{new Date(c.date_of_payment).toLocaleDateString()}</p>
+                      <p className="text-[8px] font-bold text-slate-300 uppercase">{formatDateDMY(c.date_of_payment)}</p>
                     </div>
                  </div>
                )) : (
