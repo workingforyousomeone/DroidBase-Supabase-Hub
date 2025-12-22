@@ -3,12 +3,18 @@ import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('workingforyousomeone@gmail.com');
-  const [password, setPassword] = useState('Hemal@151108');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  
+  // New Signup Fields
+  const [userId, setUserId] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('USER');
+  const [clusters, setClusters] = useState('');
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<{ message: string; code?: string; raw?: any; type: 'error' | 'success' } | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; type: 'error' | 'success' } | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -23,101 +29,163 @@ const Login: React.FC = () => {
           password,
           options: {
             data: { 
-              full_name: fullName || 'New User',
-              role: 'Administrator' 
+              user_id: userId.trim(),
+              name: name.trim(),
+              phone: phone.trim(),
+              role: role,
+              clusters: role === 'USER' ? clusters.trim() : null
             }
           }
         });
 
         if (signUpError) throw signUpError;
-        handleSuccess(data);
+        
+        if (data.user && data.session === null) {
+          setError({ 
+            message: 'Signup successful! Check your email for confirmation.', 
+            type: 'success' 
+          });
+        } else {
+          setError({ message: 'Welcome! Account created successfully.', type: 'success' });
+        }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
       }
     } catch (err: any) {
-      console.error('Auth failure:', err);
-      setError({ 
-        message: err.message || 'Authentication failed', 
-        code: err.code || err.status?.toString(),
-        raw: err,
-        type: 'error' 
-      });
+      console.error('Auth Error:', err);
+      let msg = err.message || 'Authentication failed';
+      if (msg.toLowerCase().includes('database error')) {
+        msg = 'Database error saving user. Please check if User ID or Email is unique.';
+      }
+      setError({ message: msg, type: 'error' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSuccess = (data: any) => {
-    if (data.user && data.session === null) {
-      setError({ 
-        message: 'Registration successful! Check your email for a confirmation link.', 
-        type: 'success' 
-      });
-    } else {
-      setError({ message: 'Welcome back!', type: 'success' });
     }
   };
 
   const toggleMode = () => {
     setIsSignUp(!isSignUp);
     setError(null);
-    if (!isSignUp) {
-      setEmail('');
-      setPassword('');
-    } else {
-      setEmail('workingforyousomeone@gmail.com');
-      setPassword('Hemal@151108');
-    }
+    setEmail('');
+    setPassword('');
+    setUserId('');
+    setName('');
+    setPhone('');
+    setRole('USER');
+    setClusters('');
   };
 
   return (
-    <div className="flex-1 flex flex-col px-8 pt-16 pb-10 bg-white overflow-y-auto no-scrollbar">
-      <div className="mb-10 text-center flex flex-col items-center">
-        <div className="w-20 h-20 bg-[#9A287E] rounded-[2.5rem] flex items-center justify-center mb-6 shadow-xl shadow-pink-100 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
-          <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="flex-1 flex flex-col px-8 pt-12 pb-10 bg-white overflow-y-auto no-scrollbar relative min-h-full">
+      <div className="mb-8 text-center flex flex-col items-center">
+        <div className="w-16 h-16 bg-[#9A287E] rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-pink-100 transform -rotate-3">
+          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-          {isSignUp ? 'Join Manager' : 'House Tax Manager'}
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          {isSignUp ? 'New Account' : 'House Tax Manager'}
         </h1>
-        <p className="text-slate-500 mt-2 font-medium text-sm px-4">
-          {isSignUp ? 'Create your administrator account' : 'your complete guide to house tax'}
+        <p className="text-slate-400 mt-1 font-black uppercase text-[9px] tracking-[0.2em]">
+          {isSignUp ? 'Registration Portal' : 'Administrator Access'}
         </p>
       </div>
 
-      <form onSubmit={handleAuth} className="space-y-5">
+      <form onSubmit={handleAuth} className="space-y-4">
         {isSignUp && (
-          <div className="animate-in fade-in slide-in-from-top-2">
-            <label className="block text-[10px] font-black text-[#9A287E] uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-            <div className="relative">
-              <span className="absolute left-5 top-1/2 -translate-y-1/2 text-[#9A287E]">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-              </span>
-              <input
-                type="text"
-                required
-                className="w-full pl-14 pr-5 py-4 bg-slate-50 border-0 ring-1 ring-slate-200 rounded-2xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-[#E94155]"
-                placeholder="Full Name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+            {/* User ID */}
+            <div>
+              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">User ID (Application ID)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                </span>
+                <input
+                  type="text" required
+                  className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm"
+                  placeholder="e.g. 10190758-NEW"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Name */}
+            <div>
+              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                </span>
+                <input
+                  type="text" required
+                  className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Phone Number</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                </span>
+                <input
+                  type="tel" required
+                  className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm"
+                  placeholder="+91 00000 00000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Role & Clusters Grid */}
+            <div className="grid grid-cols-2 gap-3">
+               <div>
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Access Role</label>
+                  <select 
+                    className="w-full px-4 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm appearance-none"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                  >
+                    <option value="USER">User</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="SUPER_ADMIN">Super Admin</option>
+                  </select>
+               </div>
+               <div>
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clusters</label>
+                  <input
+                    type="text"
+                    disabled={role !== 'USER'}
+                    className="w-full px-4 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm disabled:opacity-50"
+                    placeholder="e.g. C1|C4"
+                    value={clusters}
+                    onChange={(e) => setClusters(e.target.value)}
+                  />
+               </div>
             </div>
           </div>
         )}
 
+        {/* Email & Password (Common) */}
         <div>
-          <label className="block text-[10px] font-black text-[#9A287E] uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
           <div className="relative">
-            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-[#9A287E]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
             </span>
             <input
-              type="email"
-              required
-              className="w-full pl-14 pr-5 py-4 bg-slate-50 border-0 ring-1 ring-slate-200 rounded-2xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-[#E94155]"
-              placeholder="admin@taxmanager.io"
+              type="email" required
+              className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm"
+              placeholder="admin@manager.io"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -125,22 +193,14 @@ const Login: React.FC = () => {
         </div>
 
         <div>
-          <div className="flex justify-between items-center mb-1.5 ml-1">
-            <label className="block text-[10px] font-black text-[#9A287E] uppercase tracking-widest">Password</label>
-            {!isSignUp && (
-              <button type="button" className="text-[10px] font-black text-[#9A287E] uppercase tracking-widest hover:opacity-80 transition-opacity">
-                Forgot password?
-              </button>
-            )}
-          </div>
+          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Secure Password</label>
           <div className="relative">
-            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-[#9A287E]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
             </span>
             <input
-              type="password"
-              required
-              className="w-full pl-14 pr-5 py-4 bg-slate-50 border-0 ring-1 ring-slate-200 rounded-2xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-[#E94155]"
+              type="password" required
+              className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border-0 ring-1 ring-slate-100 rounded-xl focus:ring-2 focus:ring-[#9A287E] outline-none font-bold text-sm"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -149,43 +209,40 @@ const Login: React.FC = () => {
         </div>
 
         {error && (
-          <div className={`p-5 rounded-[2rem] border animate-in slide-in-from-bottom-2 duration-300 ${
-            error.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-rose-50 text-rose-900 border-rose-100 shadow-sm'
+          <div className={`p-4 rounded-xl border animate-in slide-in-from-bottom-2 ${
+            error.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-rose-50 text-rose-900 border-rose-100'
           }`}>
-            <div className="flex items-start space-x-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase mb-0.5">{error.type === 'success' ? 'Info' : 'Error'}</p>
-                <p className="text-sm font-bold leading-tight break-words">{error.message}</p>
-              </div>
-            </div>
+            <p className="text-[10px] font-black uppercase mb-0.5">{error.type === 'success' ? 'Success' : 'Attention'}</p>
+            <p className="text-xs font-bold leading-tight">{error.message}</p>
           </div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#9A287E] text-white py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-xl shadow-pink-100 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center space-x-3"
+          className="w-full bg-[#9A287E] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-pink-100 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
         >
           {loading ? (
-            <span>Processing...</span>
+            <span className="text-xs">Processing...</span>
           ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-              </svg>
-              <span>{isSignUp ? 'Get Started' : 'Enter Manager'}</span>
-            </>
+            <span>{isSignUp ? 'Create User' : 'Sign In'}</span>
           )}
         </button>
       </form>
 
-      <div className="mt-10 text-center">
+      <div className="mt-8 text-center">
         <button
           onClick={toggleMode}
-          className="text-[#9A287E] font-black text-xs uppercase tracking-widest px-6 py-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-100"
+          className="text-[#9A287E] font-black text-[9px] uppercase tracking-widest px-6 py-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors"
         >
-          {isSignUp ? 'Return to Login' : 'Create Admin Account'}
+          {isSignUp ? 'Back to Login' : 'Create New Administrator'}
         </button>
+      </div>
+
+      <div className="mt-auto pt-8 text-center">
+        <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em]">
+          Registry v1.0.3
+        </p>
       </div>
     </div>
   );

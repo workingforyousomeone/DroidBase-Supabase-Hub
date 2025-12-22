@@ -28,7 +28,7 @@ export const DataService = {
    * ZONES (Database table remains 'clusters')
    */
   async getZones() {
-    return supabase.from('clusters').select('*').order('name', { ascending: true });
+    return supabase.from('vw_cluster_overall_summary').select('cluster_id,no_of_assessments,total_demand,total_collected,total_pending ');
   },
 
   /**

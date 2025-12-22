@@ -64,9 +64,6 @@ export const DataTransformer = {
     return null;
   },
 
-  /**
-   * Specifically resolves guardian/father/husband names.
-   */
   resolveGuardianName(obj: any): string | null {
     if (!obj) return null;
     const candidates = [
@@ -80,7 +77,6 @@ export const DataTransformer = {
       if (this.isValidName(val)) return String(val).trim();
     }
 
-    // Scan for relationship patterns
     const keys = Object.keys(obj);
     const kw = ['father', 'husband', 'guardian', 'care_of', 's/o', 'w/o'];
     for (const key of keys) {
@@ -105,18 +101,12 @@ export const DataTransformer = {
     };
 
     const mapping: Record<string, string> = {
-      // Owner
       'mobile': 'Owner Details', 'phone': 'Owner Details', 'email': 'Owner Details', 'address': 'Owner Details', 'gender': 'Owner Details', 
       'father': 'Owner Details', 'husband': 'Owner Details', 'guardian': 'Owner Details', 's/o': 'Owner Details', 'w/o': 'Owner Details', 'care_of': 'Owner Details',
-      // Building
       'usage': 'Building Details', 'construction': 'Building Details', 'age': 'Building Details', 'area': 'Building Details', 'plot': 'Building Details', 'category': 'Building Details', 'build_up': 'Building Details',
-      // Floor
       'floor': 'Floor Details', 'basement': 'Floor Details', 'terrace': 'Floor Details', 'levels': 'Floor Details',
-      // Mutation
       'mutation': 'Mutation Details', 'transfer': 'Mutation Details', 'registry': 'Mutation Details', 'seller': 'Mutation Details',
-      // Neighbouring
       'north': 'Neighbouring Properties', 'south': 'Neighbouring Properties', 'east': 'Neighbouring Properties', 'west': 'Neighbouring Properties', 'boundary': 'Neighbouring Properties',
-      // Life Cycle
       'created': 'Life Cycle Details', 'approved': 'Life Cycle Details', 'updated': 'Life Cycle Details', 'active': 'Life Cycle Details', 'status': 'Life Cycle Details'
     };
 
@@ -124,10 +114,8 @@ export const DataTransformer = {
 
     Object.entries(raw).forEach(([key, val]) => {
       if (coreKeys.includes(key.toLowerCase()) || val === null || val === '') return;
-
       const lowerKey = key.toLowerCase();
       let assigned = false;
-
       for (const [kw, cat] of Object.entries(mapping)) {
         if (lowerKey.includes(kw)) {
           const displayKey = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -136,7 +124,6 @@ export const DataTransformer = {
           break;
         }
       }
-
       if (!assigned) {
         const displayKey = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         categories['Other Info'][displayKey] = val;
@@ -144,6 +131,17 @@ export const DataTransformer = {
     });
 
     return Object.fromEntries(Object.entries(categories).filter(([_, v]) => Object.keys(v).length > 0));
+  },
+
+  processMasterDataForUser(
+    assessments: RawAssessment[],
+    demands: RawDemand[],
+    collections: RawCollection[],
+    zones: any[],
+    owners: RawOwner[] = []
+  ) {
+    // This is used for regular users where assessments/demands might be filtered by RLS
+    return this.processMasterData(assessments, demands, collections, zones, owners);
   },
 
   processMasterData(
@@ -157,10 +155,6 @@ export const DataTransformer = {
     const masterNameMap = new Map<string, string>();
     const masterGuardianMap = new Map<string, string>();
 
-    /**
-     * PASS 1: GLOBAL DATA DISCOVERY (Owner names AND Guardian names)
-     */
-    
     owners.forEach(o => {
       const id = this.resolveId(o);
       const name = this.resolveName(o);
@@ -173,7 +167,6 @@ export const DataTransformer = {
       const id = this.resolveId(a);
       const name = this.resolveName(a);
       const guardian = this.resolveGuardianName(a);
-      
       if (id && name && (!masterNameMap.has(id) || masterNameMap.get(id)!.length < name.length)) {
         masterNameMap.set(id, name);
       }
@@ -182,18 +175,12 @@ export const DataTransformer = {
       }
     });
 
-    /**
-     * PASS 2: RECORD CONSTRUCTION & ENRICHMENT
-     */
-
     assessments.forEach(a => {
       const id = this.resolveId(a);
       if (!id) return;
-      
       const finalName = masterNameMap.get(id) || `Owner [ID:${id}]`;
       const finalGuardian = masterGuardianMap.get(id) || '';
       const structuredDetails = this.categorizeDetails(a);
-
       registryMap.set(id, {
         assessment_no: id,
         owner_name: finalName,
@@ -206,11 +193,9 @@ export const DataTransformer = {
       });
     });
 
-    // Merge demands and collections into the central registry
     demands.forEach(d => {
       const id = this.resolveId(d);
       if (!id) return;
-
       let record = registryMap.get(id);
       if (!record) {
         record = {
@@ -230,7 +215,6 @@ export const DataTransformer = {
     collections.forEach(c => {
       const id = this.resolveId(c);
       if (!id) return;
-
       let record = registryMap.get(id);
       if (!record) {
         record = {
@@ -256,7 +240,6 @@ export const DataTransformer = {
 
     const baseZones = Array.isArray(zones) ? [...zones] : [];
     const activeZoneIds = new Set(enriched.map(r => r.zone_id));
-    
     if (activeZoneIds.has('unassigned') && !baseZones.some(cl => String(cl.id) === 'unassigned')) {
       baseZones.push({ id: 'unassigned', name: 'External / Unlinked' });
     }
@@ -266,7 +249,6 @@ export const DataTransformer = {
       const records = enriched.filter(r => r.zone_id === zId);
       const demand = records.reduce((s, r) => s + r.demand, 0);
       const collected = records.reduce((s, r) => s + r.collected, 0);
-
       return {
         id: zId,
         name: z.name || 'Zone',
@@ -279,7 +261,6 @@ export const DataTransformer = {
 
     const totalDemand = enriched.reduce((s, r) => s + r.demand, 0);
     const totalCollected = enriched.reduce((s, r) => s + r.collected, 0);
-    
     const liveMetrics: LiveMetrics = {
       totalAssessments: enriched.length,
       totalDemand,

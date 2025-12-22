@@ -1,10 +1,13 @@
 
 export interface UserProfile {
-  id: string;
+  id: string; // Auth UUID from Supabase
   email: string;
+  user_id?: string; // App-specific ID e.g. '10190758-NEW'
   full_name?: string;
-  avatar_url?: string;
+  phone?: string;
   role?: string;
+  clusters?: string;
+  avatar_url?: string;
 }
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
